@@ -3,15 +3,14 @@ import PersonCard from '../../components/PersonCard/PersonCard';
 import SearchBar from '../../components/SearchBar/SearchBar';
 import classes from './PersonsListPage.module.css';
 import IconButton from '../../components/IconButton/IconButton';
-import {getLongDateStringWithSlashes} from '../../functions/dateFormatter';
 import PersonDrawer from '../../components/PersonDrawer/PersonDrawer';
 import InfiniteScroll from 'react-infinite-scroll-component';
-import {withRouter} from 'react-router-dom';
 import {searchPersons, deletePerson, getAllPersons} from '../../services';
 import {useNavigate} from 'react-router-dom';
 import CustomModal from '../../components/CustomModal/CustomModal';
 import {ToastContainer, toast} from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import {toastGenerator} from '../../functions/helper';
 
 const PAGE_SIZE = 10;
 
@@ -50,7 +49,7 @@ export default function PersonsListPage(props) {
 
   const onEditPersonCardClicked = (event, id) => {
     event.stopPropagation();
-    navigate(`/person/${id}/edit`);
+    navigate(`/people/${id}/edit`);
   };
 
   const onConfirmDeletePerson = async (id) => {
@@ -60,25 +59,9 @@ export default function PersonsListPage(props) {
       const newPersonsList = personList.filter((p) => p._id !== id);
       setPersonList(newPersonsList);
 
-      toast.success('Person deleted!', {
-        position: 'bottom-center',
-        autoClose: 5000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-      });
+      toastGenerator('success', 'Person deleted!', 3000);
     } else {
-      toast.error('Something went wrong... :(', {
-        position: 'bottom-center',
-        autoClose: 5000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-      });
+      toastGenerator('error', 'Something went wrong... :(', 3000);
     }
 
     setDeleteModalOpen(false);
@@ -123,7 +106,7 @@ export default function PersonsListPage(props) {
           name={`${selectedInfo.first_name} ${selectedInfo.last_name || ''}`}
           id={selectedInfo._id}
           birthday={selectedInfo.birthday}
-          img={selectedInfo.img}
+          img={selectedInfo.image}
           gender={selectedInfo.gender}
           organisation={selectedInfo.organisation}
           socialMedia={selectedInfo.socialMedia}
@@ -190,6 +173,7 @@ export default function PersonsListPage(props) {
                     onEdit={(e) => onEditPersonCardClicked(e, person._id)}
                     onDelete={(e) => onDeletePersonCardClicked(e, person._id)}
                     firstMet= {person.first_met}
+                    image={person.image}
                   />
                 </div>
               );

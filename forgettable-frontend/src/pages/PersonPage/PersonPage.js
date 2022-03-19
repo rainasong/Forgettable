@@ -13,6 +13,9 @@ import CustomModal from '../../components/CustomModal/CustomModal';
 import {ToastContainer, toast} from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import {convertSocialMedia} from '../../functions/convertSocialMediaFormat';
+import {getImageSrcFromBuffer} from '../../functions/getImageSrcFromBuffer';
+import {toastGenerator} from '../../functions/helper';
+
 
 /*
  * This is the detailed person profile page. Displays the information
@@ -39,7 +42,7 @@ const PersonPage = (props) => {
     interests: [],
     organisation: '',
     socialMedia: [],
-    img: '',
+    image: '',
     encounters: [],
     timeUpdated: null,
   });
@@ -57,7 +60,7 @@ const PersonPage = (props) => {
       interests: result.interests,
       organisation: result.organisation,
       socialMedia: convertSocialMedia(result.socialMedia),
-      img: result.image,
+      image: result.image,
       encounters: result.encounters || [],
       timeUpdated: result.timeUpdated,
     });
@@ -103,25 +106,9 @@ const PersonPage = (props) => {
         encounters: person.encounters.filter((e) => e._id !== encounter._id),
       });
 
-      toast.success('Encounter deleted!', {
-        position: 'bottom-center',
-        autoClose: 5000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-      });
+      toastGenerator('success', 'Encounter deleted!', 3000);
     } else {
-      toast.error('Something went wrong... :(', {
-        position: 'bottom-center',
-        autoClose: 5000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-      });
+      toastGenerator('error', 'Something went wrong... :(', 3000);
     }
 
     setDeleteModalOpen(false);
@@ -155,7 +142,7 @@ const PersonPage = (props) => {
 
       <PersonDrawer
         open={true}
-        img={person.img}
+        img={person.image}
         staticDrawer={true}
         name={`${person.firstName} ${person.lastName || ''}`}
         firstMet={person.firstMet}
@@ -166,7 +153,7 @@ const PersonPage = (props) => {
         birthday={person.birthday}
         socialMedias={person.socialMedia}
         data-testid="drawer-component"
-        onEdit={() => navigate(`edit`)}
+        onEdit={() => navigate(`/people/${id}/edit`)}
       />
       <div className={classes.ContentContainer}>
         <div className={classes.TitleContainer} >

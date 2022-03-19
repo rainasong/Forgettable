@@ -8,14 +8,14 @@ import PersonCardSummary from '../../components/PersonCardSummary/PersonCardSumm
 import PersonDrawer from '../../components/PersonDrawer/PersonDrawer';
 import {Link} from 'react-router-dom';
 import IconButton from '../../components/IconButton/IconButton';
-import EncounterSummary from '../../components/EncounterCardSummary/EncounterSummary';
+import EncounterCardSummary from '../../components/EncounterCardSummary/EncounterCardSummary';
 import EncounterDrawer from '../../components/EncounterDrawer/EncounterDrawer';
 import CustomModal from '../../components/CustomModal/CustomModal';
 import EncountersLogo from '../../assets/icons/navbar/encounters.svg';
 import PeopleLogo from '../../assets/icons/navbar/persons.svg';
 import { getAllEncounters, getAllPersons } from '../../services';
 import { searchBarDataFormatter } from '../../functions/searchBarDataFormatter';
-global.Buffer = global.Buffer || require('buffer').Buffer;
+import { getImageSrcFromBuffer } from '../../functions/getImageSrcFromBuffer';
 
 function Home() {
   const [selectedInfo, setSelectedInfo] = React.useState(undefined);
@@ -34,19 +34,13 @@ function Home() {
     // convert people image buffers to image srcs.
     peopleResult.forEach((person) => {
       if (person.image) {
-        const base64String = Buffer.from(person.image, 'base64');
-        person.image = base64String;
+        person.image = getImageSrcFromBuffer(person.image);
       }
     });
 
     setPeopleList(peopleResult);
     let encountersResult = [];
     encountersResult = await getAllEncounters();
-
-    encountersResult.forEach((encounter) => {
-      const people = encounter.persons.map((personID) => peopleResult.find((element) => element._id === personID));
-      encounter.persons = people;
-    });
 
     setEncountersList(encountersResult);
 
@@ -92,7 +86,7 @@ function Home() {
       <CustomModal open={modalOpen} onClose={handleModalClose} hasCancel={true}>
         <div className={classes.home_modalTitle}>Add a new entry</div>
         <div className={classes.home_modalButtonsContainer}>
-          <Link to="/people/new" style={{textDecoration: 'none'}}>
+          <Link to="/people/create" style={{textDecoration: 'none'}}>
             <IconButton
               btnText="Person"
               onClick={()=>{}}
@@ -102,7 +96,7 @@ function Home() {
               customIcon={PeopleLogo}/>
           </Link>
           <div className={classes.home_verticalBreak} />
-          <Link to="/encounters/new" style={{textDecoration: 'none'}}>
+          <Link to="/encounters/create" style={{textDecoration: 'none'}}>
             <IconButton
               btnText="Encounter"
               onClick={()=>{}}
@@ -157,13 +151,14 @@ function Home() {
           {encountersList.map((encounter, index) => {
             return (
               <div key={index + 'e'} className={classes.home_cardWrapper} onMouseEnter={(event) => handleEncounterHover(event, index)}>
-                <Link to={`/encounters/${encounter._id}`} style={{textDecoration: 'none'}}>
-                  <EncounterSummary
-                    name={encounter.persons[0]?.first_name}
-                    date={encounter.date}
+                <Link to={`/encounters`} style={{textDecoration: 'none'}}>
+                  <EncounterCardSummary
+                    firstName={encounter.persons[0]?.first_name}
+                    dateMet={encounter.date}
                     description={encounter.description}
-                    summary={encounter.title}
-                    src={encounter.persons[0]?.image}
+                    firstMet={encounter.title}
+                    img={encounter.persons[0]?.image}
+                    location={encounter.location}
                   />
                 </Link>
               </div>);
@@ -182,7 +177,7 @@ function SummaryDrawer(summaryInfo) {
       open={true}
       id={summaryInfo.info.id}
       name={summaryInfo.info.first_name}
-      img={summaryInfo.info.img}
+      img={summaryInfo.info.image}
       firstMet={summaryInfo.info.firstMet}
       onClick={summaryInfo.info.onClick}
       location={summaryInfo.info.location}
@@ -196,7 +191,7 @@ function SummaryDrawer(summaryInfo) {
       open={true}
       id={summaryInfo.info.id}
       encounterTitle={summaryInfo.info.title}
-      img={summaryInfo.info.persons[0]?.img}
+      img={summaryInfo.info.persons[0]?.image}
       persons={summaryInfo.info.persons}
       dateMet={summaryInfo.info.date}
       location={summaryInfo.info.location}
