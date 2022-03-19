@@ -9,9 +9,11 @@ import { PersonModel } from 'src/models/person.model';
 import userService from '../services/user.service';
 import personService from '../services/person.service';
 import encounterService from '../services/encounter.service';
+import getPersonDetails from './utils/controller-utils';
 
 import logger from '../utils/logger';
 import { POST } from './controller.types';
+import { PaginateableResponse } from 'src/utils/paginateable.response';
 
 export const createPerson: POST = async (
   req: Request,
@@ -67,14 +69,27 @@ export const getPersonWithId = async (
     } else {
       // If the person belongs to this user, find it
       let person: any;
+      let personDto: any;
       if (user.persons.includes(new mongoose.Types.ObjectId(req.params.id))) {
         person = await personService.getPersonWithId(req.params.id);
+
+        //Adds embedded encounters with user details to returned person
+        //The stringify and parse combo removes typing and allows altering of the parsed objects.
+        personDto = JSON.parse(JSON.stringify(person));
+        personDto.encounters = JSON.parse(JSON.stringify(
+          await Promise.all(personDto.encounters.map(
+            async (encounterId: any) => { return (await encounterService.getEncounter(encounterId)) }))));
+
+        for (let i = 0; i < personDto.encounters.length; i++ ) {
+          personDto.encounters[i].persons = await Promise.all(personDto.encounters[i].persons.map(
+            async (personsId: any) => { return (await getPersonDetails(personsId))}));
+        }
       }
 
       if (!person) {
         res.status(httpStatus.NOT_FOUND).end();
       } else {
-        res.status(httpStatus.OK).json(person).end();
+        res.status(httpStatus.OK).json(personDto).end();
       }
     }
   } catch (e) {
@@ -84,9 +99,11 @@ export const getPersonWithId = async (
 
 export const getAllPeople = async (
   req: Request,
-  res: Response,
+  expressRes: Response,
   next: NextFunction,
 ): Promise<void> => {
+  const res = expressRes as PaginateableResponse;
+
   logger.info('GET /persons request from frontend');
 
   const authId = req.headers.authorization?.['user_id'];
@@ -97,7 +114,8 @@ export const getAllPeople = async (
       res.status(httpStatus.NOT_FOUND).end();
     } else {
       const foundUserPersons = await personService.getPeople(req.query, user.persons);
-      res.status(httpStatus.OK).json(foundUserPersons).end();
+
+      res.status(httpStatus.OK).paginate(foundUserPersons);
     }
   } catch (e) {
     next(e);
@@ -113,27 +131,42 @@ export const deletePersons = async (
     const auth_id = req.headers.authorization?.["user_id"];
     
     const current_user = await userService.getUserByAuthId(auth_id);
-    const user_id = req.params.id;
+    const id = req.params.id;
 
     const user_persons = current_user?.persons;
     let string_persons = user_persons?.map(x => x.toString());
 
-    if (string_persons?.includes(user_id.toString())) {
+    if (string_persons?.includes(id.toString())) {
       try {
-        // Delete user from database
-        await personService.deletePersons(req.params.id);
+        // Delete person from database
+        const deletePersonsResult = await personService.deletePersons(id);
 
         // return encounters that may have empty persons fields
-        const empty_encounters = await encounterService.deleteEncounterPerson(req.params.id);
-        await userService.deleteUserPerson(req.params.id);
+        const deleteEncountersResult = await encounterService.deleteEncounterPerson(id);
+        const empty_encounters = deleteEncountersResult["array"];
+        const EncountersBool = deleteEncountersResult["bool"];
 
-        // Make sure that empty encounters are also deleted from User
-        for (let i = 0; i < empty_encounters.length; i++) {
-          await userService.deleteUserEncounter(empty_encounters[i]?._id.toString());
+        //delete person from current User document
+        const deleteUserResult = await userService.deleteUserPerson(id);
+
+        // Check all service function calls were valid
+        if (EncountersBool && deletePersonsResult && deleteUserResult) {
+
+          // Make sure that empty encounters are also deleted from User
+          for (let i = 0; i < empty_encounters.length; i++) {
+            let result = await userService.deleteUserEncounter(empty_encounters[i]?._id.toString());
+
+            // Check that a valid deleteUserEncounter was executed
+            if (!result) {
+              res.sendStatus(httpStatus.BAD_REQUEST).end();
+            }
+          }
+          // Notify frontend that the operation was successful
+          res.sendStatus(httpStatus.OK).end();
+        } else {
+          // Notify frontend that the operation was successful
+          res.sendStatus(httpStatus.BAD_REQUEST).end();
         }
-        
-        // Notify frontend that the operation was successful
-        res.sendStatus(httpStatus.OK).end();
       } catch(e) {
   
         next(e);
@@ -174,4 +207,3 @@ export const updatePersonWithId = async (
     next(error);
   }
 };
-

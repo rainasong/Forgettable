@@ -10,6 +10,8 @@ import logger from '../utils/logger';
 import { EncounterModel } from '../models/encounter.model';
 import userService, { getUserByAuthId } from '../services/user.service';
 import personService from '../services/person.service';
+import { PaginateableResponse } from 'src/utils/paginateable.response';
+import getPersonDetails from './utils/controller-utils';
 
 // Util function that won't be needed regularly
 const getEncounterFromReqBody = (body: any) => {
@@ -133,7 +135,9 @@ export const getEncounter = async (
       // Find encounter from database
       const encounter = await encounterService.getEncounter(encounterId);
       // Notify frontend that the operation was successful
-      res.status(httpStatus.OK).json(encounter).end();
+      let encounterDto = JSON.parse(JSON.stringify(encounter));
+      encounterDto.persons = await Promise.all(encounterDto.persons.map(async (personId: any) => { return (await getPersonDetails(personId)) }));
+      res.status(httpStatus.OK).json(encounterDto).end();
     } else {
       res.sendStatus(httpStatus.NOT_FOUND).end();
     }
@@ -142,11 +146,50 @@ export const getEncounter = async (
   }
 };
 
-export const getAllEncounters = async (
+export const deleteEncounters = async (
   req: Request,
   res: Response,
   next: NextFunction,
+  ): Promise<void> => {
+    logger.info("DELETE /encounters/:encounterID request from frontend");
+    const auth_id = req.headers.authorization?.["user_id"];
+    
+    const current_user = await userService.getUserByAuthId(auth_id);
+    const id = req.params.id;
+    const user_encounters = current_user?.encounters;
+    let string_encounters = user_encounters?.map(x => x.toString());
+
+    if (string_encounters?.includes(id.toString())) {
+      try {
+        // Delete encounter from Encounter and Person collection
+        const deleteEncounterResult = await encounterService.deleteEncounter(id);
+        const deletePersonEncountersResult = await personService.deletePersonEncounters(id);
+        const deleteUserEncounterResult = await userService.deleteUserEncounter(id);
+
+        // Notify frontend that the operation was successful
+        if (deleteEncounterResult && deletePersonEncountersResult && deleteUserEncounterResult) {
+          res.sendStatus(httpStatus.OK).end();
+        } else {
+          res.sendStatus(httpStatus.BAD_REQUEST).end();
+        }
+        
+      } catch(e) {
+  
+        next(e);
+      }
+    } else {
+      res.sendStatus(httpStatus.NOT_FOUND).end();
+    }
+    
+    res.status(httpStatus.OK).end();
+  };
+
+export const getAllEncounters = async (
+  req: Request,
+  expressRes: Response,
+  next: NextFunction,
 ): Promise<void> => {
+  const res = expressRes as PaginateableResponse;
   logger.info('GET /encounters request from frontend');
 
   const authId = req.headers.authorization?.['user_id'];
@@ -156,8 +199,17 @@ export const getAllEncounters = async (
     if (!user) {
       res.status(httpStatus.NOT_FOUND).end();
     } else {
-      const foundUserEncounters = await encounterService.getAllEncounters(user.encounters);
-      res.status(httpStatus.OK).json(foundUserEncounters).end();
+
+      //The stringify and parse combo removes typing and allows the persons field in each encounter to be altered
+      const foundUserEncounters = JSON.parse(JSON.stringify(await encounterService.getAllEncounters(req.query, user.encounters)));
+
+      //Adds embedded person details to the returned encounters
+      for (let i = 0; i < foundUserEncounters.length; i++) {
+        foundUserEncounters[i].persons = await Promise.all(foundUserEncounters[i].persons.map(
+          async (personsId: any) => { return (await getPersonDetails(personsId))}));
+      }
+
+      res.status(httpStatus.OK).paginate(foundUserEncounters);
     }
   } catch (e) {
     next(e);
